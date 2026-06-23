@@ -22,7 +22,7 @@ That bridge is called **MCP — the Model Context Protocol**.
            │   Your AI client    │   ← Claude Desktop, ChatGPT, Cursor, Teams
            └──────────┬──────────┘
                       │
-                      │   speaks MCP (a standard "language")
+                      │   speaks MCP (a standard "language")   {Q1: When we say MCP, it's just JSON-RPC 2.0 — transport-agnostic, with JSON-RPC as the data format, correct?}
                       │
                       ▼
            ┌─────────────────────┐
@@ -38,6 +38,26 @@ That bridge is called **MCP — the Model Context Protocol**.
 ```
 
 **One sentence:** MCP is the standardised "USB plug" that lets any AI client talk to any business system. Our project is the Krista-side end of that plug.
+
+> **A1 — JSON-RPC vs MCP, transport, and what's the actual relationship?**
+>
+> Half right — let's sharpen it. There are **three layers**, and conflating them is the most common beginner mistake:
+>
+> | Layer | What it is | Example |
+> |---|---|---|
+> | **1. Envelope** — JSON-RPC 2.0 | The *shape of every message*. Any JSON-RPC message has `jsonrpc:"2.0"`, an `id`, a `method` name, and `params`. That's the spec from json-rpc.org. JSON-RPC by itself knows NOTHING about tools, sessions, capabilities, etc. | `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{...}}` |
+> | **2. Protocol** — **MCP** | The *vocabulary* that fills the envelope. MCP defines which `method` names exist (`initialize`, `tools/list`, `tools/call`, `resources/read`, `prompts/get`, `notifications/tools/list_changed`, …), what each one expects in `params`, the result shape, lifecycle rules (initialize handshake first, then anything goes), capabilities negotiation, session ids, and error code semantics. NONE of that is in JSON-RPC. | `method: "tools/call"` is an MCP-defined verb; `method: "subtract"` would also be valid JSON-RPC but is NOT MCP. |
+> | **3. Transport** — stdio / Streamable HTTP | The *pipe* the envelopes travel through. JSON-RPC envelopes go in; same JSON-RPC envelopes come out. The transport adds framing rules (newline-delimited on stdio, SSE chunks on HTTP) but does not change the message itself. | `POST /mcp` with `Content-Type: application/json` + SSE response. |
+>
+> So precisely:
+>
+> 1. **"MCP is nothing but JSON-RPC 2.0"** — not quite. MCP *uses* JSON-RPC 2.0 as its envelope. It's like saying "English is nothing but the Latin alphabet" — true that English uses the Latin alphabet, but English also has grammar, vocabulary, idioms. Same here: MCP = JSON-RPC envelope + a defined method vocabulary + lifecycle + capabilities + transport rules.
+>
+> 2. **"Agnostic of transport"** — ✅ exactly right. The same JSON-RPC envelope works on stdio (line-framed pipes) AND on Streamable HTTP (POST body + SSE response). The MCP spec defines two official transports and the envelope is identical on both.
+>
+> 3. **"JSON-RPC is the format we use to send data"** — ✅ exactly right. JSON-RPC 2.0 is the wire format. Every byte traveling between client and brain is wrapped in that envelope.
+>
+> A useful mental model: **JSON-RPC is the alphabet; MCP is the language; stdio/HTTP is the postal service.** All three need to agree for a message to be both deliverable and understood.
 
 ---
 
