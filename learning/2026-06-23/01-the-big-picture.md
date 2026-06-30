@@ -39,15 +39,49 @@ That bridge is called **MCP — the Model Context Protocol**.
 
 **One sentence:** MCP is the standardised "USB plug" that lets any AI client talk to any business system. Our project is the Krista-side end of that plug.
 
+### Picture the USB analogy
+
+Before USB existed, every device had its own weird connector — a printer cable, a mouse port, a keyboard plug, a serial port. Nothing fit anything else. Then USB arrived: **one shape**, and suddenly any device could plug into any computer.
+
+MCP does the same thing for AI ↔ business systems. Before MCP, every AI client would need custom code for every system (Claude-to-Krista code, ChatGPT-to-Salesforce code, …). With MCP, there's **one shape** — so any MCP client plugs into any MCP server.
+
+```
+        THE AI CLIENTS                    THE "USB STANDARD"               THE BUSINESS SYSTEMS
+        (the laptops)                        (the MCP plug)                  (the USB devices)
+
+   ┌───────────────────┐                                                ┌───────────────────┐
+   │  🤖 Claude Desktop │──┐                                          ┌──│  📊 Krista        │ ← OUR project is
+   └───────────────────┘  │                                          │  │     (invoices,    │   the socket on
+   ┌───────────────────┐  │      ╔════════════╗   ╔════════════╗     │  │     customers…)   │   THIS side
+   │  🤖 ChatGPT        │──┤      ║            ║   ║            ║     ├──└───────────────────┘
+   └───────────────────┘  │      ║   ▣▣▣▣▣   ║   ║   ▣▣▣▣▣   ║     │  ┌───────────────────┐
+   ┌───────────────────┐  ├─────▶║  MCP plug  ║───║  MCP plug  ║◀────┤  │  📁 (Salesforce)  │
+   │  🤖 Cursor         │──┤      ║  (client)  ║   ║  (server)  ║     ├──│                   │
+   └───────────────────┘  │      ║            ║   ║            ║     │  └───────────────────┘
+   ┌───────────────────┐  │      ╚════════════╝   ╚════════════╝     │  ┌───────────────────┐
+   │  🤖 Teams          │──┘         the SAME shape on both ends      └──│  🗄️ (any system)  │
+   └───────────────────┘                                                └───────────────────┘
+
+        Many different                  One agreed-upon plug                 Many different
+        AI clients…                     shape (MCP / JSON-RPC)…              business systems…
+
+                    …and because the plug shape is identical, ANY client on the
+                    left can talk to ANY server on the right with NO custom wiring.
+```
+
+**The punchline:** Krista didn't have to write special code for Claude, *and* special code for ChatGPT, *and* special code for Cursor. Krista built **one** MCP socket (`krista-mcp-server`), and every MCP-speaking AI client fits it automatically. That "build once, plug in anything" property is the entire reason MCP exists.
+
+> 💡 **Where the "plug" actually is:** the male plug (the part that initiates) is the AI client's MCP code. The female socket (the part that receives) is our `krista-mcp-server`. The "shape" they both agree on is **JSON-RPC 2.0 messages with MCP's vocabulary** (which you saw in Q1/A1 below).
+
 > **A1 — JSON-RPC vs MCP, transport, and what's the actual relationship?**
 >
 > Half right — let's sharpen it. There are **three layers**, and conflating them is the most common beginner mistake:
 >
-> | Layer | What it is | Example |
-> |---|---|---|
-> | **1. Envelope** — JSON-RPC 2.0 | The *shape of every message*. Any JSON-RPC message has `jsonrpc:"2.0"`, an `id`, a `method` name, and `params`. That's the spec from json-rpc.org. JSON-RPC by itself knows NOTHING about tools, sessions, capabilities, etc. | `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{...}}` |
-> | **2. Protocol** — **MCP** | The *vocabulary* that fills the envelope. MCP defines which `method` names exist (`initialize`, `tools/list`, `tools/call`, `resources/read`, `prompts/get`, `notifications/tools/list_changed`, …), what each one expects in `params`, the result shape, lifecycle rules (initialize handshake first, then anything goes), capabilities negotiation, session ids, and error code semantics. NONE of that is in JSON-RPC. | `method: "tools/call"` is an MCP-defined verb; `method: "subtract"` would also be valid JSON-RPC but is NOT MCP. |
-> | **3. Transport** — stdio / Streamable HTTP | The *pipe* the envelopes travel through. JSON-RPC envelopes go in; same JSON-RPC envelopes come out. The transport adds framing rules (newline-delimited on stdio, SSE chunks on HTTP) but does not change the message itself. | `POST /mcp` with `Content-Type: application/json` + SSE response. |
+> | Layer                                      | What it is                                                                                                                                                                                                                                                                                                                                                                                                                | Example                                                                                                          |
+> |--------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
+> | **1. Envelope** — JSON-RPC 2.0             | The *shape of every message*. Any JSON-RPC message has `jsonrpc:"2.0"`, an `id`, a `method` name, and `params`. That's the spec from json-rpc.org. JSON-RPC by itself knows NOTHING about tools, sessions, capabilities, etc.                                                                                                                                                                                             | `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{...}}`                                                  |
+> | **2. Protocol** — **MCP**                  | The *vocabulary* that fills the envelope. MCP defines which `method` names exist (`initialize`, `tools/list`, `tools/call`, `resources/read`, `prompts/get`, `notifications/tools/list_changed`, …), what each one expects in `params`, the result shape, lifecycle rules (initialize handshake first, then anything goes), capabilities negotiation, session ids, and error code semantics. NONE of that is in JSON-RPC. | `method: "tools/call"` is an MCP-defined verb; `method: "subtract"` would also be valid JSON-RPC but is NOT MCP. |
+> | **3. Transport** — stdio / Streamable HTTP | The *pipe* the envelopes travel through. JSON-RPC envelopes go in; same JSON-RPC envelopes come out. The transport adds framing rules (newline-delimited on stdio, SSE chunks on HTTP) but does not change the message itself.                                                                                                                                                                                            | `POST /mcp` with `Content-Type: application/json` + SSE response.                                                |
 >
 > So precisely:
 >
